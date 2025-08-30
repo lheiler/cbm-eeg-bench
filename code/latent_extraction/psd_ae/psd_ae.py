@@ -11,13 +11,14 @@ import sys
 import random
 from typing import Union
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Add the utils directory to the Python path
 utils_path = Path(__file__).resolve().parent.parent.parent / "utils"
 sys.path.insert(0, str(utils_path))
 
 from gen_dataset import TUHFIF60sDataset
-from util import compute_psd_from_raw, PSD_CALCULATION_PARAMS, compute_psd_from_array
+from util import compute_psd_from_raw, PSD_CALCULATION_PARAMS, compute_psd_from_array, normalize_psd
 
 SEED = 42
 
@@ -182,6 +183,26 @@ def train(model, train_loader, val_loader, device, sfreq: float, epochs: int = 1
     criterion = nn.MSELoss()
     model.to(device)
     model.train()
+    # Precompute Welch parameters and frequency bins once
+    n_fft = int(PSD_CALCULATION_PARAMS["n_fft"])
+    n_overlap = int(PSD_CALCULATION_PARAMS["n_overlap"])
+    n_per_seg = int(PSD_CALCULATION_PARAMS["n_per_seg"])
+    fmin = float(PSD_CALCULATION_PARAMS.get("min_freq", 1.0))
+    fmax = float(PSD_CALCULATION_PARAMS.get("max_freq", 45.0))
+    seg_len = int(PSD_CALCULATION_PARAMS["segment_length"] * sfreq)
+    dummy = np.zeros(seg_len, dtype=np.float32)
+    _, freqs_np = mne.time_frequency.psd_array_welch(
+        dummy[None, :],
+        sfreq=float(sfreq),
+        n_fft=n_fft,
+        n_overlap=n_overlap,
+        n_per_seg=n_per_seg,
+        average="mean",
+        verbose=False,
+        fmin=fmin,
+        fmax=fmax,
+    )
+    freqs_t = torch.from_numpy(freqs_np.astype(np.float32))
     best_val_loss: float | None = None
     best_state: dict[str, torch.Tensor] | None = None
     bad_epochs = 0
@@ -189,34 +210,29 @@ def train(model, train_loader, val_loader, device, sfreq: float, epochs: int = 1
     for epoch in range(epochs):
         total_loss = 0.0
         n_steps = 0
-        for batch in train_loader:
+        for batch in tqdm(train_loader):
             # batch: (B, C, T) time-domain
             B, C, T = batch.shape
-            psd_list = []
-            freqs_t = None
-            for i in range(B):
-                ch_list = []
-                for ch in range(C):
-                    psd_vec, freqs_np = compute_psd_from_array(
-                        batch[i, ch].cpu().numpy(), sfreq=sfreq, return_freqs=True, normalize=True
-                    )
-                    ch_list.append(torch.from_numpy(psd_vec))
-                    if freqs_t is None:
-                        freqs_t = torch.from_numpy(freqs_np)
-                psd_list.append(torch.stack(ch_list, dim=0))  # (C,F)
-            psd = torch.stack(psd_list, dim=0)  # (B,C,F)
-            _, _, F = psd.shape
-            # treat each channel PSD as a separate input vector
-            inputs = psd.reshape(B * C, F).to(device)
-
-            # Frequency mask to align with preprocessing band (e.g., ≤45 Hz)
-            fmin = float(PSD_CALCULATION_PARAMS.get("min_freq", 0.0))
-            fmax = float(PSD_CALCULATION_PARAMS.get("max_freq", 64.0))
-            mask = (freqs_t >= fmin) & (freqs_t <= fmax)
+            x_np = batch.detach().cpu().numpy().astype(np.float32)
+            x2d = x_np.reshape(B * C, T)
+            psd_2d, _ = mne.time_frequency.psd_array_welch(
+                x2d,
+                sfreq=float(sfreq),
+                n_fft=n_fft,
+                n_overlap=n_overlap,
+                n_per_seg=n_per_seg,
+                average="mean",
+                verbose=False,
+                fmin=fmin,
+                fmax=fmax,
+            )  # (B*C, F)
+            # Normalize per vector (log10 + z-score)
+            psd_2d_norm = normalize_psd(psd_2d.astype(np.float32))
+            inputs = torch.from_numpy(psd_2d_norm).to(device)
 
             optimizer.zero_grad()
             recon = model(inputs)
-            loss = criterion(recon[:, mask], inputs[:, mask])
+            loss = criterion(recon, inputs)
             loss.backward()
             optimizer.step()
 
@@ -232,26 +248,26 @@ def train(model, train_loader, val_loader, device, sfreq: float, epochs: int = 1
             val_steps = 0
             for batch in val_loader:
                 B, C, T = batch.shape
-                psd_list = []
-                freqs_t = None
-                for i in range(B):
-                    ch_list = []
-                    for ch in range(C):
-                        psd_vec, freqs_np = compute_psd_from_array(
-                            batch[i, ch].cpu().numpy(), sfreq=sfreq, return_freqs=True, normalize=True
-                        )
-                        ch_list.append(torch.from_numpy(psd_vec))
-                        if freqs_t is None:
-                            freqs_t = torch.from_numpy(freqs_np)
-                    psd_list.append(torch.stack(ch_list, dim=0))  # (C,F)
-                psd = torch.stack(psd_list, dim=0)  # (B,C,F)
-                _, _, F = psd.shape
-                inputs = psd.reshape(B * C, F).to(device)
+                x_np = batch.detach().cpu().numpy().astype(np.float32)
+                x2d = x_np.reshape(B * C, T)
+                psd_2d, _ = mne.time_frequency.psd_array_welch(
+                    x2d,
+                    sfreq=float(sfreq),
+                    n_fft=n_fft,
+                    n_overlap=n_overlap,
+                    n_per_seg=n_per_seg,
+                    average="mean",
+                    verbose=False,
+                    fmin=fmin,
+                    fmax=fmax,
+                )  # (B*C, F)
+                psd_2d_norm = normalize_psd(psd_2d.astype(np.float32))
+                inputs = torch.from_numpy(psd_2d_norm).to(device)
                 recon = model(inputs)
                 if val_steps == 1:  # save once per epoch
                     Path("plots").mkdir(exist_ok=True)
                     _plot_recon_example(inputs.detach().cpu(), recon.detach().cpu(), freqs_t.detach().cpu(), path=Path("plots/val_recon_example.png"))
-                val_total += float(criterion(recon[:, mask], inputs[:, mask]).item())
+                val_total += float(criterion(recon, inputs).item())
                 val_steps += 1
             val_loss = val_total / max(1, val_steps)
             print(f"Epoch {epoch} val loss: {val_loss:.6f}")
@@ -262,6 +278,15 @@ def train(model, train_loader, val_loader, device, sfreq: float, epochs: int = 1
                 best_val_loss = val_loss
                 bad_epochs = 0
                 best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                 # Save model
+                Path("models").mkdir(parents=True, exist_ok=True)
+                save_path = Path(f"models/psd_ae_{latent_dim}.pth")
+                torch.save({
+                    "state_dict": model.state_dict(),
+                    "freqs": torch.from_numpy(freqs_np.astype(np.float32)),
+                    "latent_dim": latent_dim,
+                    "input_dim": input_dim,
+                }, str(save_path))
             else:
                 bad_epochs += 1
                 if bad_epochs >= patience:
@@ -285,11 +310,15 @@ if __name__ == "__main__":
     print("[INFO] Starting PSD-AE training run")
     # Load dataset (time-domain segments)
     latent_dim = 8
-    
-    dataset = TUHFIF60sDataset(root="/rds/general/user/lrh24/home/thesis/Datasets/tuh-eeg-ab-clean/train")
+    batch_size = 512    
+    dataset = TUHFIF60sDataset("/rds/general/user/lrh24/home/thesis/Datasets/tuh-eeg-ab-clean/train_epochs.pkl")
     print(f"Loaded {len(dataset)} files")
 
-    input_dim = PSD_CALCULATION_PARAMS["n_fft"] // 2 + 1
+    # Determine input_dim from actual PSD frequency bins used (respects fmin/fmax)
+    seg_len = int(PSD_CALCULATION_PARAMS["segment_length"] * dataset.sfreq)
+    dummy = np.zeros(seg_len, dtype=np.float32)
+    _, freqs_np = compute_psd_from_array(dummy, sfreq=dataset.sfreq, return_freqs=True, normalize=False)
+    input_dim = int(freqs_np.shape[0])
    
     # Create model for per-channel PSD vectors
     model = PSDAE(input_dim=input_dim, latent_dim=latent_dim).to(device)
@@ -300,8 +329,8 @@ if __name__ == "__main__":
     train_ds, val_ds = random_split(
         dataset, [n - n_val, n_val], generator=torch.Generator().manual_seed(SEED)
     )
-    train_loader = DataLoader(train_ds, batch_size=16, shuffle=True, num_workers=4, pin_memory=(device == "cuda"))
-    val_loader   = DataLoader(val_ds,   batch_size=16, shuffle=False, num_workers=4, pin_memory=(device == "cuda"))
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=(device == "cuda"))
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=(device == "cuda"))
 
     print(f"num train samples={len(train_ds)} num val samples={len(val_ds)}")
 
@@ -313,9 +342,10 @@ if __name__ == "__main__":
     save_path = Path(f"models/psd_ae_{latent_dim}.pth")
     torch.save({
         "state_dict": model.state_dict(),
-        "freqs": torch.as_tensor(PSD_CALCULATION_PARAMS["freqs"]),
+        "freqs": torch.from_numpy(freqs_np.astype(np.float32)),
         "latent_dim": latent_dim,
         "input_dim": input_dim,
     }, str(save_path))
 
     print(f"[INFO] Saved model to {save_path}")
+    

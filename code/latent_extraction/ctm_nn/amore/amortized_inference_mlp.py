@@ -16,10 +16,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 from utils.util import (
-    STANDARD_EEG_CHANNELS,
     PSD_CALCULATION_PARAMS,
-    clean_raw_eeg,
-    compute_psd_from_raw,
     normalize_psd_torch,
     normalize_psd,
     select_device,
@@ -273,7 +270,7 @@ def train(
 
     # Model & optimiser
     model = ParameterRegressor().to(device)
-    optim = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optim = torch.optim.Adam(model.parameters(), lr=1e-5)
     
     # Use custom PSD loss instead of MSE on parameters
     freqs_tensor = torch.as_tensor(FREQS, dtype=torch.float32, device=device)
@@ -286,7 +283,9 @@ def train(
         training data, and computes an MSE with the target PSD.
         """
         # Forward model: parameters → PSD
-        pred_psd = compute_ctm_psd(params, freqs_tensor)          # (B,F)
+        pred_psd = compute_ctm_psd(params, freqs_tensor)  # (B,F)
+        
+
 
         # Restrict comparison to configured frequency band
         fmin = float(PSD_CALCULATION_PARAMS.get("min_freq", 0.0))
@@ -295,8 +294,8 @@ def train(
         pred_psd = pred_psd[:, mask]
         target_psd = target_psd[:, mask]
 
-        # Log‑transform & z‑score predicted PSD to match training data format
         pred_psd = _normalise(pred_psd)
+
         # target_psd is already normalized from generate_dataset(), don't normalize again!
         return torch.nn.functional.mse_loss(pred_psd, target_psd)
 
@@ -378,59 +377,6 @@ def train(
         
     final_test_loss = float(np.mean(test_losses)) if test_losses else float('nan')
     print(f"[OK] Training complete – final test PSD loss: {final_test_loss:.4e}")
-
-###############################################################################
-#                           INFERENCE                                        #
-###############################################################################
-
-# ----------------------------------------------------------------------------
-# TUH EEG PSD extraction utility (unchanged)                                   
-# ----------------------------------------------------------------------------
-
-def extract_psds_from_tuh(
-    root_dir: pathlib.Path,
-    preload_path: pathlib.Path = pathlib.Path("data/preloaded_psds.npy"),
-    reset: bool = False,
-) -> np.ndarray:
-    """Extract normalised PSDs from TUH EEG dataset. Each channel PSD is one sample.
-
-    Uses shared preprocessing and Welch parameters via utils.
-    """
-    fif_files = list(root_dir.rglob("*.fif"))
-    print(f"[INFO] Found {len(fif_files)} files in {root_dir}")
-
-    if preload_path.exists() and not reset:
-        all_psds = np.load(preload_path)
-        if int(all_psds.shape[0] / 19) == len(fif_files):
-            return all_psds
-        else:
-            print(
-                f"[INFO] Preloaded PSDs has {all_psds.shape[0]} channels, but {len(fif_files)} files. Recomputing."
-            )
-    else:
-        print(f"[INFO] Preloaded PSDs file does not exist. Recomputing.")
-
-    all_psds: list[np.ndarray] = []
-
-    for fif_path in tqdm(fif_files):
-        try:
-            raw = mne.io.read_raw_fif(fif_path, preload=True, verbose="ERROR")
-            # Standardise channels and filtering
-            raw = clean_raw_eeg(raw)
-            # Compute per-channel Welch PSD with shared params and normalisation
-            psd_cf = compute_psd_from_raw(raw, calculate_average=False, normalize=True)  # (C,F)
-            all_psds.append(psd_cf)
-        except Exception as e:
-            print(f"[WARN] Skipping {fif_path.name}: {e}")
-
-    if not all_psds:
-        raise RuntimeError("No PSDs extracted from TUH directory.")
-
-    stacked = np.concatenate(all_psds, axis=0)  # (N_files*C, F)
-    print(stacked.shape)
-    np.save(preload_path, stacked)
-    return stacked
-
 
 
 
