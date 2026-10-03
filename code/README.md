@@ -71,21 +71,24 @@ code/
 ├── configs/                     # YAML configuration files
 │   └── default.yaml
 ├── main.py                      # Entry point
-├── job_script.sh                # PBS batch script (update paths before use)
-├── requirements.txt
+├── job_script.sh                # PBS batch script (adjust queue/resources)
 └── README.md
 ```
 
 ---
 
 ## Setup
-```bash
-# Create and activate a virtual environment
-python -m venv ~/env_thesis && source ~/env_thesis/bin/activate
+The environment is defined in `pyproject.toml` at the repository root and pinned in `uv.lock` (Python 3.11).
 
-# Install dependencies
-pip install -r requirements.txt
+```bash
+# From the repository root
+uv sync                        # create .venv with the exact locked versions
+uv sync --extra posterior      # optional: sbi + corner for ctm_nn/amore/amortized_inference_post.py
 ```
+
+Run scripts from `code/` either with `uv run python ...` or after `source ../.venv/bin/activate`. All commands below assume `code/` as the working directory.
+
+Without uv: `pip install -r ../requirements.txt` installs the same pinned versions (regenerate it after changing dependencies with `uv export --no-hashes -o requirements.txt` from the root).
 
 **Note:** On some HPC clusters, `pycatch22` may need to be compiled from source (see [HPC Usage](#hpc-usage)).
 
@@ -97,25 +100,32 @@ pip install -r requirements.txt
 
 If starting from raw TUH EDF files, run the cleaning pipeline first. It performs: channel renaming, bad-channel interpolation, edge trimming, bandpass filtering, ICA artifact removal (EOG/ECG), average re-referencing, artifact annotation, canonical 19-channel ordering, epoching, AutoReject, and beta/alpha QC.
 
-```python
-from data_preprocessing.cleanup_real_eeg_tuh import load_data
-
-load_data(
-    data_path_train="/path/to/tuh/edf/train",
-    data_path_eval="/path/to/tuh/edf/eval",
-    save_path="/path/to/tuh-eeg-ab-clean",
-    sfreq=128,
-    epoch_len_s=10.0,
-)
+```bash
+python -m data_preprocessing.cleanup_real_eeg_tuh \
+    --train_path /path/to/tuh-eeg-ab/v3.0.1/edf/train \
+    --eval_path  /path/to/tuh-eeg-ab/v3.0.1/edf/eval \
+    --save_path  ../Datasets/tuh-eeg-ab-clean   # default; --sfreq 128 --epoch_len_s 10 --n_jobs 10
 ```
 
 ### LEMON Dataset
 
 The LEMON preprocessing script (`data_preprocessing/cleanup_lemon.py`) handles directory traversal of the untarred data, maps Initial IDs to INDI IDs via a lookup table, integrates age/sex metadata, filters for eyes-closed (EC) recordings, and applies shared cleaning logic from the TUH pipeline followed by AutoReject QC.
 
+```bash
+python -m data_preprocessing.cleanup_lemon \
+    --data_path     /path/to/LEMON/EEG_Raw_BIDS_ID \
+    --metadata_path /path/to/LEMON/Participants_MPILMBB_LEMON.csv \
+    --id_map_path   /path/to/LEMON/name_match.csv \
+    --save_path     ../Datasets/lemon            # default
+```
+
 ### Harvard Dataset
 
-Download and cleaning utilities are in `data_preprocessing/harvard_python/`. Harvard is supported in the code (`cleanup_harvard.py`) but is not part of the primary benchmark.
+Download and cleaning utilities are in `data_preprocessing/harvard_python/`. Harvard is supported in the code (`cleanup_harvard.py`) but is not part of the primary benchmark. The download scripts require BDSP credentials and the AWS CLI; set `HARVARD_ROOT` to the folder holding the BDSP metadata CSVs in `metadata/` (downloads go to `$HARVARD_ROOT/EEG/`). Then:
+
+```bash
+python -m data_preprocessing.cleanup_harvard --data_path /path/to/harvard-eeg/EEG/bids_age_500
+```
 
 ---
 
@@ -145,8 +155,8 @@ Configuration via `configs/default.yaml`:
 method: ctm_nn_avg
 
 datasets:
-  lemon: "/path/to/Datasets/lemon"
-  tuh: "/path/to/Datasets/tuh-eeg-ab-clean"
+  lemon: "../Datasets/lemon"            # relative to code/
+  tuh: "../Datasets/tuh-eeg-ab-clean"
 
 paths:
   results_root: "Results"
@@ -190,7 +200,7 @@ For each dataset in the config, the pipeline executes:
 
 ### Batch Execution (HPC)
 ```bash
-qsub job_script.sh
+qsub job_script.sh   # submit from code/
 ```
 Edit `job_script.sh` to select which methods to run.
 
@@ -269,7 +279,7 @@ Method names accepted by `--method` and `config.yaml`:
 ---
 
 ## HPC Usage
-A PBS job script (`job_script.sh`) is provided. Update paths and modules for your system:
+A PBS job script (`job_script.sh`) is provided. Run `uv sync` once on a login node (compute nodes then need no network access), adjust the queue/resources for your cluster, and submit from `code/`:
 
 ```bash
 #!/bin/bash
@@ -278,8 +288,8 @@ A PBS job script (`job_script.sh`) is provided. Update paths and modules for you
 #PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=64:mem=128gb
 
-cd /path/to/thesis/code
-source ~/env_thesis/bin/activate
+cd "${PBS_O_WORKDIR:-.}"
+source ../.venv/bin/activate   # created with `uv sync` at the repo root
 
 python main.py --method jr_avg
 python main.py --method hopf_pc
@@ -312,7 +322,7 @@ python main.py --method hopf_pc
 ---
 
 ## Dependencies
-See `requirements.txt`. Key packages:
+Declared in `../pyproject.toml`, pinned in `../uv.lock`. Key packages:
 
 | Category             | Packages                                            |
 |----------------------|-----------------------------------------------------|
@@ -320,7 +330,7 @@ See `requirements.txt`. Key packages:
 | Deep learning        | `torch`                                             |
 | EEG processing       | `mne`, `mne-bids`, `autoreject`                     |
 | Optimisation         | `optuna`, `cma`                                     |
-| Feature extraction   | `pycatch22`                                         |
+| Feature extraction   | `pycatch22`, `numba` (JIT for model solvers)        |
 | Visualisation        | `matplotlib`, `seaborn`                             |
 | Utilities            | `PyYAML`, `tqdm`                                    |
 

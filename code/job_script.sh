@@ -4,10 +4,11 @@
 #PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=64:mem=128gb
 
+# Runs the benchmark for the selected methods. Adjust the PBS queue/resources for your cluster.
+# Submit from code/:  qsub job_script.sh
 
-# cd /rds/general/user/lrh24/home/msc_thesis/code
-
-# source ~/env_thesis/bin/activate
+cd "${PBS_O_WORKDIR:-.}"
+source ../.venv/bin/activate   # created with `uv sync` at the repo root
 
 # python main.py --method ctm_nn_pc
 # python main.py --method ctm_nn_avg
@@ -24,5 +25,3 @@ python main.py --method wong_wang_avg
 python main.py --method hopf_avg
 python main.py --method hopf_pc
 python main.py --method ctm_cma_avg
-
-

@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 import shutil
 from pathlib import Path
@@ -10,6 +11,10 @@ from pathlib import Path
 
 
 import pandas as pd
+
+
+# Root folder holding metadata/ (BDSP CSVs) and EEG/ (downloaded BIDS data)
+HARVARD_ROOT = os.environ.get("HARVARD_ROOT", "harvard-eeg")
 
 
 def _safe_int(x):
@@ -96,12 +101,12 @@ def write_meta_to_sidecar(bids_root: Path, bids_path, meta_dict):
 
 
 # === Setup ===
-bids_root_in = Path("/rds/general/user/lrh24/ephemeral/harvard-eeg/EEG/bids_2000_normal_abnormal")
-bids_root_out = Path("/rds/general/user/lrh24/ephemeral/harvard-eeg/EEG/bids_2000_normal_abnormal_clean")
+bids_root_in = Path(f"{HARVARD_ROOT}/EEG/bids_2000_normal_abnormal")
+bids_root_out = Path(f"{HARVARD_ROOT}/EEG/bids_2000_normal_abnormal_clean")
 
 
 # IMPORTANT: All the metadata CSVs must be in the same directory
-csv_dir = Path("/rds/general/user/lrh24/ephemeral/harvard-eeg/metadata") 
+csv_dir = Path(f"{HARVARD_ROOT}/metadata") 
 
 bids_root_out.mkdir(parents=True, exist_ok=True)
 

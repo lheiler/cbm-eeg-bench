@@ -5,6 +5,7 @@ integration, eyes-closed filtering, and AutoReject/beta-alpha QC.
 """
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import pickle
@@ -307,11 +308,11 @@ def load_data_lemon(data_path: str, save_path: str, metadata_path: str, id_map_p
             logger.info("  Files with <20 epochs: %d", len(insufficient))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", default="/home/lheiler/data/LEMON/EEG_Raw_BIDS_ID")
-    parser.add_argument("--metadata_path", default="/home/lheiler/data/LEMON/Participants_MPILMBB_LEMON.csv")
-    parser.add_argument("--id_map_path", default="/home/lheiler/data/LEMON/name_match.csv")
-    parser.add_argument("--save_path", default="/Users/lorenzheiler/msc_thesis/Datasets/lemon")
+    parser = argparse.ArgumentParser(description="Clean the raw LEMON EEG data into train/eval epoch pickles.")
+    parser.add_argument("--data_path", required=True, help="Untarred LEMON raw data (EEG_Raw_BIDS_ID)")
+    parser.add_argument("--metadata_path", required=True, help="Participants_MPILMBB_LEMON.csv")
+    parser.add_argument("--id_map_path", required=True, help="name_match.csv (Initial ID -> INDI ID)")
+    parser.add_argument("--save_path", default="../Datasets/lemon")
     parser.add_argument("--n_jobs", type=int, default=16)
     args = parser.parse_args()
     

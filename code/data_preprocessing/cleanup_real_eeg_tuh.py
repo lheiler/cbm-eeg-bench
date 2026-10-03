@@ -1,6 +1,7 @@
 """EEG preprocessing pipeline for the TUH Abnormal EEG dataset."""
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import pickle
@@ -654,13 +655,14 @@ def load_data(data_path_train: str, data_path_eval: str, save_path: str, sfreq: 
 
 
 if __name__ == "__main__":
-    # Example usage
-    data_path_train = "/Users/lorenzheiler/msc_thesis/Datasets/tuh-eeg-ab/v3.0.1/edf/train"
-    data_path_eval = "/Users/lorenzheiler/msc_thesis/Datasets/tuh-eeg-ab/v3.0.1/edf/eval"
-    save_path = "/Users/lorenzheiler/msc_thesis/Datasets/tuh-eeg-ab-clean"
-    epoch_len_s = 10.0
-    sfreq = 128
-    n_jobs = 10
+    parser = argparse.ArgumentParser(description="Clean the raw TUH Abnormal EEG corpus into train/eval epoch pickles.")
+    parser.add_argument("--train_path", required=True, help="TUH-AB edf/train directory (e.g. tuh-eeg-ab/v3.0.1/edf/train)")
+    parser.add_argument("--eval_path", required=True, help="TUH-AB edf/eval directory")
+    parser.add_argument("--save_path", default="../Datasets/tuh-eeg-ab-clean")
+    parser.add_argument("--sfreq", type=int, default=128)
+    parser.add_argument("--epoch_len_s", type=float, default=10.0)
+    parser.add_argument("--n_jobs", type=int, default=10)
+    args = parser.parse_args()
 
-    load_data(data_path_train, data_path_eval, save_path, sfreq, epoch_len_s, n_jobs=n_jobs)
+    load_data(args.train_path, args.eval_path, args.save_path, args.sfreq, args.epoch_len_s, n_jobs=args.n_jobs)
     print("[done] Data cleaning pipeline finished.")

@@ -3,17 +3,16 @@
 #PBS -lwalltime=12:00:00
 #PBS -lselect=1:ncpus=32:mem=64gb
 
-
-# ======= Runtime Environment =======
-# Load modules or activate your Python env
-# Example: conda
+# Downloads a HEEDB subset from BDSP's S3 bucket (requires approved BDSP AWS credentials).
+# Submit from this directory:  qsub dl_cl_data.sh
 
 module load tools/prod
 module load awscli
 
-source ~/env_thesis/bin/activate
+cd "${PBS_O_WORKDIR:-.}"
+source ../../../.venv/bin/activate   # created with `uv sync` at the repo root
 
-cd /rds/general/user/lrh24/home/thesis/Datasets/harvard_python
+# Folder holding metadata/ (BDSP CSVs); downloads go to $HARVARD_ROOT/EEG/
+export HARVARD_ROOT="${HARVARD_ROOT:-/path/to/harvard-eeg}"
 
-# ======= Launch your script =======
 python download_script_500_age.py

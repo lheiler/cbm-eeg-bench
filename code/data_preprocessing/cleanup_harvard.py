@@ -1,6 +1,7 @@
 """EEG preprocessing pipeline for the Harvard EEG dataset."""
 from __future__ import annotations
 
+import argparse
 import gc
 import glob
 import logging
@@ -724,13 +725,13 @@ def load_data(data_path, save_path, sfreq=128, epoch_len_s: float = 10.0, n_jobs
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Clean downloaded HEEDB (Harvard) BIDS data into train/eval epoch pickles.")
+    parser.add_argument("--data_path", required=True, help="BIDS root produced by harvard_python/download_script_*.py")
+    parser.add_argument("--save_path", default="../Datasets/harvard-eeg-clean")
+    parser.add_argument("--sfreq", type=int, default=128)
+    parser.add_argument("--epoch_len_s", type=float, default=10.0)
+    parser.add_argument("--n_jobs", type=int, default=64, help="64 fits in 256GB RAM (~16GB peak per worker)")
+    args = parser.parse_args()
 
-    # Example usage
-    data_path = "/rds/general/user/lrh24/ephemeral/harvard/EEG/bids_age_500"
-    save_path = "/rds/general/user/lrh24/home/thesis/Datasets/harvard-eeg-clean"
-    epoch_len_s = 10.0
-    sfreq = 128
-    n_jobs = 64 # Optimized for 256GB RAM (approx 16GB per worker peak)
-
-    load_data(data_path, save_path, sfreq, epoch_len_s, n_jobs=n_jobs)
+    load_data(args.data_path, args.save_path, args.sfreq, args.epoch_len_s, n_jobs=args.n_jobs)
     print("[done] Data cleaning pipeline finished.")

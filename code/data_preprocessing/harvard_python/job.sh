@@ -2,14 +2,13 @@
 #PBS -lwalltime=10:00:00
 #PBS -lselect=1:ncpus=32:mem=32gb
 
+# Cleans a downloaded HEEDB BIDS subset.
+# Submit from this directory:  qsub job.sh
 
-# ======= Runtime Environment =======
-# Load modules or activate your Python env
-# Example: conda
+cd "${PBS_O_WORKDIR:-.}"
+source ../../../.venv/bin/activate   # created with `uv sync` at the repo root
 
-source ~/env_thesis/bin/activate
+# Folder holding metadata/ (BDSP CSVs) and EEG/ (downloaded BIDS data)
+export HARVARD_ROOT="${HARVARD_ROOT:-/path/to/harvard-eeg}"
 
-cd /rds/general/user/lrh24/home/thesis/Datasets/harvard_python
-
-# ======= Launch your script =======
 python clean_data.py

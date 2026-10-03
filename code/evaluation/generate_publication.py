@@ -1,6 +1,7 @@
 """Generate publication-quality figures from evaluation results."""
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -1014,7 +1015,9 @@ def generate_figM1_psd_reconstruction(output_dir, results_dir):
 # =====================================================================
 
 def main():
-    results_dir = "/rds/general/user/lrh24/home/msc_thesis/code/Results"
+    parser = argparse.ArgumentParser(description="Generate publication figures and tables from pipeline results.")
+    parser.add_argument("--results_dir", default="Results", help="Results root written by main.py")
+    results_dir = parser.parse_args().results_dir
     output_dir = os.path.join(results_dir, "publication_figures")
     logger.info("Collecting metrics")
     all_metrics = collect_all_metrics(results_dir)

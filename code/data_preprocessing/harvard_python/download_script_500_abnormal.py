@@ -1,6 +1,10 @@
 import pandas as pd
 import os
 
+
+# Root folder holding metadata/ (BDSP CSVs) and EEG/ (downloaded BIDS data)
+HARVARD_ROOT = os.environ.get("HARVARD_ROOT", "harvard-eeg")
+
 # ------------------------------------------------------------
 # Set the number of sessions you want for *each* class here.
 # Simply change `n` to control how many normal and abnormal EEGs
@@ -10,15 +14,15 @@ n = 500  # <-- adjust this value as needed
 n_normal = n
 n_abnormal = n
 
-desired_dir = "/rds/general/user/lrh24/ephemeral/harvard-eeg/EEG/"
+desired_dir = f"{HARVARD_ROOT}/EEG/"
 
 # Load EEG metadata
-meta1 = pd.read_csv("/rds/general/user/lrh24/ephemeral/harvard-eeg/metadata/S0001_eeg_metadata_2025-05-06.csv")
-meta2 = pd.read_csv("/rds/general/user/lrh24/ephemeral/harvard-eeg/metadata/S0002_eeg_metadata_2025-05-06.csv")
+meta1 = pd.read_csv(f"{HARVARD_ROOT}/metadata/S0001_eeg_metadata_2025-05-06.csv")
+meta2 = pd.read_csv(f"{HARVARD_ROOT}/metadata/S0002_eeg_metadata_2025-05-06.csv")
 
 # Load EEG reports
-reports1 = pd.read_csv("/rds/general/user/lrh24/ephemeral/harvard-eeg/metadata/S0001_EEG__reports_findings.csv")
-reports2 = pd.read_csv("/rds/general/user/lrh24/ephemeral/harvard-eeg/metadata/S0002_EEG__reports_findings.csv")
+reports1 = pd.read_csv(f"{HARVARD_ROOT}/metadata/S0001_EEG__reports_findings.csv")
+reports2 = pd.read_csv(f"{HARVARD_ROOT}/metadata/S0002_EEG__reports_findings.csv")
 
 # Combine metadata and reports
 meta = pd.concat([meta1, meta2], ignore_index=True)
