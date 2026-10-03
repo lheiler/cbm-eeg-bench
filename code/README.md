@@ -232,6 +232,12 @@ Results/{dataset}-{method}/
 ```
 
 ### Aggregated Outputs (under `Results/`)
+Generated after all methods have been run (from `code/`):
+```bash
+python -m evaluation.metrics_and_plots       # cross-method comparison; RESULTS_DIR overrides Results/
+python -m evaluation.generate_publication    # figures/tables; --results_dir, plus TUH_EVAL_EPOCHS /
+                                             # LEMON_EVAL_EPOCHS to override ../Datasets/*/eval_epochs.pkl
+```
 ```
 Results/
 ├── metrics_and_plots/                 # Cross-method comparison (CKA, Procrustes, CCA)

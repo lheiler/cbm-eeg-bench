@@ -727,8 +727,8 @@ def generate_figA1_multidim_efficiency(all_metrics, output_dir):
 # =====================================================================
 
 _GEO_DATASET_PATHS: Dict[str, str] = {
-    "tuh": os.environ.get("TUH_EVAL_EPOCHS", "Datasets/tuh-eeg-ab-clean/eval_epochs.pkl"),
-    "lemon": os.environ.get("LEMON_EVAL_EPOCHS", "Datasets/lemon/eval_epochs.pkl"),
+    "tuh": os.environ.get("TUH_EVAL_EPOCHS", "../Datasets/tuh-eeg-ab-clean/eval_epochs.pkl"),
+    "lemon": os.environ.get("LEMON_EVAL_EPOCHS", "../Datasets/lemon/eval_epochs.pkl"),
 }
 
 def _distance_correlation(X: np.ndarray, Y: np.ndarray) -> float:
