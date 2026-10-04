@@ -56,8 +56,5 @@ The pre-trained models needed for extraction (CTM regressor, PSD-AE, EEGNet-AE, 
 * **pyproject.toml / uv.lock**: Pinned, reproducible Python environment.
 * **final_report.pdf**: The completed thesis document.
 
-## Citation
-If you use this code, please cite it via the "Cite this repository" button on GitHub (metadata in [`CITATION.cff`](./CITATION.cff)).
-
 ## License
 The source code is released under the [MIT License](./LICENSE). The thesis document (`final_report.pdf`) is not covered by the MIT License; all rights reserved.
